@@ -1,6 +1,7 @@
 from policy import CribbagePolicy, CompositePolicy, GreedyThrower, GreedyPegger
 from deck import Deck
-import scoring
+from collections import defaultdict
+import scoring, random
 
 class MyPolicy(CribbagePolicy):
     def __init__(self, game):
@@ -8,7 +9,30 @@ class MyPolicy(CribbagePolicy):
 
         
     def keep(self, hand, scores, am_dealer):
-        keep, throw, net_score = scoring.greedy_throw(self._game, hand, 1 if am_dealer else -1)
+        remaining_deck = Deck(range(1,14), ['S', 'H', 'D', 'C'], 1)
+        for card in hand:
+            remaining_deck._cards.remove(card)
+        crib = 1 if am_dealer else -1
+        
+        def score_split(indices):
+            keep = []
+            throw = []
+            score = 0
+            for i in range(len(hand)):
+                if i in indices:
+                    throw.append(hand[i])
+                else:
+                    keep.append(hand[i])
+            for turn in remaining_deck._cards:
+                score += scoring.score(self._game, keep, turn, False)[0] + crib * scoring.score(self._game, throw, turn, True)[0]
+            score /= len(remaining_deck._cards)
+            return keep, throw, score
+
+        throw_indices = self._game.throw_indices()
+        
+        random.shuffle(throw_indices)
+
+        keep, throw, best_score = max(map(lambda i: score_split(i), throw_indices), key=lambda t: t[2])
         return keep, throw
 
     def peg(self, cards, history, turn, scores, am_dealer):
@@ -21,36 +45,43 @@ class MyPolicy(CribbagePolicy):
             play fours, aces
         - setting up pairs
         """
-        curr_count = history.total_points()
         best_card = None
-        best_score = None
-        # remaining_deck = Deck(range(1,14), ['S', 'H', 'D', 'C'], 1)
-        # print(remaining_deck._cards)
-        # print(history.total_points())
+        if history.has_legal_play(self._game, cards, 0 if am_dealer else 1):
+            curr_count = history.total_points()
+            best_score = None
+            rank_count = defaultdict(int)
+            for card in cards:
+                rank_count[card.rank()] += 1
 
-        for card in cards:
-            new_count = curr_count + (card.rank() if card.rank() < 10 else 10)
-            if new_count <= 31:                
-                if history.is_start_round():
-                    if card.rank() == 4:
-                        best_card = card
-                        break
-                    elif card.rank() == 3:
+            for card in cards:
+                new_count = curr_count + (card.rank() if card.rank() < 10 else 10)
+                if new_count <= 31:                
+                    if history.is_start_round():
+                        if card.rank() == 4:
+                            best_card = card
+                            break
+                        elif card.rank() == 3:
+                            best_card = card
+                            break
+                        else:
+                            if card.rank() < 5:
+                                best_card = card
+                                break
+                            elif rank_count[card.rank()] > 1:
+                                best_card = card
+                                break
+                            elif card.rank() != 10 and card.rank() != 5:
+                                best_card = card
+                            else:
+                                best_card = card
+                    elif new_count == 15:
                         best_card = card
                         break
                     else:
-                        if card.rank() < 5:
+                        score = history.score(self._game, card, 0 if am_dealer else 1)
+                        if score is not None and (best_score is None or score > best_score):
+                            best_score = score
                             best_card = card
-                            break
-                        elif card.rank() != 10 and card.rank() != 5:
+                        if best_score == 0 and curr_count < 15 and new_count > 15:
                             best_card = card
-                        else:
-                            best_card = card
-                else:
-                    score = history.score(self._game, card, 0 if am_dealer else 1)
-                    
-                    if score is not None and (best_score is None or score > best_score):
-                        best_score = score
-                        best_card = card
-        # print(history.plays())
         return best_card
