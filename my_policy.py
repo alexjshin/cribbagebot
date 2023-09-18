@@ -1,4 +1,4 @@
-from policy import CribbagePolicy, CompositePolicy, GreedyThrower, GreedyPegger
+from policy import CribbagePolicy
 from deck import Deck
 from collections import defaultdict
 import scoring, random
@@ -49,32 +49,35 @@ class MyPolicy(CribbagePolicy):
         if history.has_legal_play(self._game, cards, 0 if am_dealer else 1):
             curr_count = history.total_points()
             best_score = None
+
             rank_count = defaultdict(int)
             for card in cards:
                 rank_count[card.rank()] += 1
 
+            if history.is_start_round():
+                for card in cards:
+                    card_rank = card.rank()
+                    if card_rank == 4:
+                        return card
+                    # elif card_rank == 3:
+                    #     return card
+                    elif card_rank < 5 and rank_count[card_rank] > 1:
+                        return card
+                    elif card_rank < 5:
+                        return card
+                    elif rank_count[card_rank] > 1:
+                        return card
+                    elif card_rank != 10 and card_rank != 5:
+                        best_card = card 
+                    else:
+                        best_card = card   
+                return best_card
+
             for card in cards:
-                new_count = curr_count + (card.rank() if card.rank() < 10 else 10)
+                card_rank = card.rank()
+                new_count = curr_count + (card_rank if card_rank < 10 else 10)
                 if new_count <= 31:                
-                    if history.is_start_round():
-                        if card.rank() == 4:
-                            best_card = card
-                            break
-                        elif card.rank() == 3:
-                            best_card = card
-                            break
-                        else:
-                            if card.rank() < 5:
-                                best_card = card
-                                break
-                            elif rank_count[card.rank()] > 1:
-                                best_card = card
-                                break
-                            elif card.rank() != 10 and card.rank() != 5:
-                                best_card = card
-                            else:
-                                best_card = card
-                    elif new_count == 15:
+                    if new_count == 15:
                         best_card = card
                         break
                     else:
@@ -84,4 +87,6 @@ class MyPolicy(CribbagePolicy):
                             best_card = card
                         if best_score == 0 and curr_count < 15 and new_count > 15:
                             best_card = card
+                    
         return best_card
+
